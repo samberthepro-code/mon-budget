@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#172d4b">
+  <meta name="theme-color" content="#18365b">
   <meta name="description" content="Mon Budget — gérez vos gains, dépenses, dettes et épargne.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="style.css">
@@ -73,13 +73,37 @@
 
   <dialog id="paymentDialog">
     <form id="paymentForm" method="dialog" class="dialog-form">
-      <div class="dialog-head"><div><p class="eyebrow">REMBOURSEMENT</p><h2>Enregistrer un paiement</h2></div><button type="button" class="icon-btn" data-close="paymentDialog">✕</button></div>
-      <input id="paymentDebtId" type="hidden">
+      <div class="dialog-head"><div><p class="eyebrow">REMBOURSEMENT</p><h2 id="paymentDialogTitle">Enregistrer un paiement</h2></div><button type="button" class="icon-btn" data-close="paymentDialog">✕</button></div>
+      <input id="paymentDebtId" type="hidden"><input id="paymentEditId" type="hidden">
       <p id="paymentDebtInfo" class="muted"></p>
       <label>Montant payé<input id="paymentAmount" type="number" min="0.01" step="0.01" required></label>
       <label>Date du paiement<input id="paymentDate" type="date" required></label>
-      <div class="dialog-actions"><button type="button" class="secondary" data-close="paymentDialog">Annuler</button><button class="primary" type="submit">Confirmer le paiement</button></div>
+      <div class="dialog-actions"><button type="button" class="secondary" data-close="paymentDialog">Annuler</button><button class="primary" id="paymentSubmit" type="submit">Confirmer le paiement</button></div>
       <p id="paymentError" class="message"></p>
+    </form>
+  </dialog>
+
+  <dialog id="receivableDialog">
+    <form id="receivableForm" method="dialog" class="dialog-form">
+      <div class="dialog-head"><div><p class="eyebrow">ARGENT À VENIR</p><h2>Ajouter une somme à recevoir</h2></div><button type="button" class="icon-btn" data-close="receivableDialog">✕</button></div>
+      <label>Motif / nom<input id="receivableLabel" required maxlength="100" placeholder="Ex. Remboursement, prime…"></label>
+      <label>Qui doit vous payer ?<input id="receivableDebtor" required maxlength="100" placeholder="Ex. Employeur, proche, client…"></label>
+      <div class="form-grid"><label>Montant attendu<input id="receivableAmount" type="number" min="0.01" step="0.01" required></label><label>Devise<select id="receivableCurrency"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option><option>MAD</option><option>CAD</option></select></label></div>
+      <label>Date prévue (facultative)<input id="receivableDue" type="date"></label>
+      <div class="dialog-actions"><button type="button" class="secondary" data-close="receivableDialog">Annuler</button><button class="primary" type="submit">Enregistrer</button></div>
+      <p id="receivableError" class="message"></p>
+    </form>
+  </dialog>
+
+  <dialog id="collectionDialog">
+    <form id="collectionForm" method="dialog" class="dialog-form">
+      <div class="dialog-head"><div><p class="eyebrow">ARGENT REÇU</p><h2>Confirmer un encaissement</h2></div><button type="button" class="icon-btn" data-close="collectionDialog">✕</button></div>
+      <input id="collectionId" type="hidden">
+      <p id="collectionInfo" class="muted"></p>
+      <label>Montant reçu<input id="collectionAmount" type="number" min="0.01" step="0.01" required></label>
+      <label>Date de réception<input id="collectionDate" type="date" required></label>
+      <div class="dialog-actions"><button type="button" class="secondary" data-close="collectionDialog">Annuler</button><button class="primary" type="submit">Confirmer la réception</button></div>
+      <p id="collectionError" class="message"></p>
     </form>
   </dialog>
 
