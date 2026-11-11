@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#172d4b">
+  <meta name="description" content="Mon Budget — gérez vos gains, dépenses, dettes et épargne.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+  <title>Mon Budget</title>
+</head>
+<body>
+  <div id="auth" class="auth-wrap">
+    <section class="auth-card">
+      <div class="brand-mark">€</div>
+      <h1>Mon Budget</h1>
+      <p class="muted">Votre argent, en toute clarté.</p>
+      <div class="auth-tabs">
+        <button id="loginTab" class="active">Connexion</button>
+        <button id="signupTab">Créer un compte</button>
+      </div>
+      <form id="authForm">
+        <label>Adresse e-mail<input id="email" type="email" autocomplete="email" required placeholder="vous@exemple.fr"></label>
+        <label>Mot de passe<input id="password" type="password" autocomplete="current-password" minlength="8" required placeholder="8 caractères minimum"></label>
+        <button class="primary full" id="authSubmit">Se connecter</button>
+      </form>
+      <p id="authMessage" class="message" aria-live="polite"></p>
+      <p class="tiny muted">Vos données sont privées et associées à votre compte.</p>
+    </section>
+  </div>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark small">€</div><div><strong>Mon Budget</strong><small>Gestion personnelle</small></div></div>
+      <nav id="sideNav"></nav>
+      <div class="side-bottom"><span id="userEmail" class="tiny muted"></span><button id="logout" class="ghost">Déconnexion</button></div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div><p class="eyebrow">ESPACE PERSONNEL</p><h1 id="pageTitle">Résumé</h1></div>
+        <div class="top-actions"><span class="sync-pill" id="syncStatus">● Connecté</span><button id="addQuick" class="primary">＋ Ajouter</button></div>
+      </header>
+      <section id="view"></section>
+      <footer>Mon Budget · Données synchronisées avec votre compte</footer>
+    </main>
+  </div>
+
+  <dialog id="transactionDialog">
+    <form id="transactionForm" method="dialog" class="dialog-form">
+      <div class="dialog-head"><div><p class="eyebrow">OPÉRATION</p><h2 id="transactionDialogTitle">Ajouter une opération</h2></div><button type="button" class="icon-btn" data-close="transactionDialog">✕</button></div>
+      <input type="hidden" id="transactionId">
+      <label>Type<select id="txType"><option value="income">Gain</option><option value="expense">Dépense</option></select></label>
+      <label>Libellé<input id="txLabel" required maxlength="100" placeholder="Ex. Salaire, courses, loyer"></label>
+      <div class="form-grid"><label>Montant<input id="txAmount" type="number" min="0.01" step="0.01" required></label><label>Devise<select id="txCurrency"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option><option>MAD</option><option>CAD</option></select></label></div>
+      <div class="form-grid"><label>Date<input id="txDate" type="date" required></label><label>Catégorie<input id="txCategory" placeholder="Ex. Logement"></label></div>
+      <label>Note (facultatif)<textarea id="txNote" rows="2"></textarea></label>
+      <div class="dialog-actions"><button type="button" class="secondary" data-close="transactionDialog">Annuler</button><button class="primary" type="submit">Enregistrer</button></div>
+      <p id="txError" class="message"></p>
+    </form>
+  </dialog>
+
+  <dialog id="debtDialog">
+    <form id="debtForm" method="dialog" class="dialog-form">
+      <div class="dialog-head"><div><p class="eyebrow">ENGAGEMENT</p><h2>Ajouter une dette</h2></div><button type="button" class="icon-btn" data-close="debtDialog">✕</button></div>
+      <label>Nom de la dette<input id="debtLabel" required maxlength="100" placeholder="Ex. Prêt personnel"></label>
+      <label>Créancier<input id="debtCreditor" required maxlength="100" placeholder="Banque, personne…"></label>
+      <div class="form-grid"><label>Montant total<input id="debtAmount" type="number" min="0.01" step="0.01" required></label><label>Devise<select id="debtCurrency"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option><option>MAD</option><option>CAD</option></select></label></div>
+      <label>Échéance (facultative)<input id="debtDue" type="date"></label>
+      <div class="dialog-actions"><button type="button" class="secondary" data-close="debtDialog">Annuler</button><button class="primary" type="submit">Enregistrer</button></div>
+      <p id="debtError" class="message"></p>
+    </form>
+  </dialog>
+
+  <dialog id="paymentDialog">
+    <form id="paymentForm" method="dialog" class="dialog-form">
+      <div class="dialog-head"><div><p class="eyebrow">REMBOURSEMENT</p><h2>Enregistrer un paiement</h2></div><button type="button" class="icon-btn" data-close="paymentDialog">✕</button></div>
+      <input id="paymentDebtId" type="hidden">
+      <p id="paymentDebtInfo" class="muted"></p>
+      <label>Montant payé<input id="paymentAmount" type="number" min="0.01" step="0.01" required></label>
+      <label>Date du paiement<input id="paymentDate" type="date" required></label>
+      <div class="dialog-actions"><button type="button" class="secondary" data-close="paymentDialog">Annuler</button><button class="primary" type="submit">Confirmer le paiement</button></div>
+      <p id="paymentError" class="message"></p>
+    </form>
+  </dialog>
+
+  <dialog id="recurringDialog">
+    <form id="recurringForm" method="dialog" class="dialog-form">
+      <div class="dialog-head"><div><p class="eyebrow">AUTOMATISATION</p><h2>Nouvelle récurrence</h2></div><button type="button" class="icon-btn" data-close="recurringDialog">✕</button></div>
+      <label>Libellé<input id="recLabel" required></label>
+      <div class="form-grid"><label>Type<select id="recType"><option value="income">Gain</option><option value="expense">Dépense</option></select></label><label>Montant<input id="recAmount" type="number" min="0.01" step="0.01" required></label></div>
+      <div class="form-grid"><label>Devise<select id="recCurrency"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></label><label>Fréquence<select id="recFrequency"><option value="weekly">Chaque semaine</option><option value="biweekly">Toutes les 2 semaines</option><option value="monthly" selected>Chaque mois</option><option value="quarterly">Chaque trimestre</option><option value="yearly">Chaque année</option></select></label></div>
+      <label>Première date<input id="recStart" type="date" required></label>
+      <div class="dialog-actions"><button type="button" class="secondary" data-close="recurringDialog">Annuler</button><button class="primary" type="submit">Créer</button></div>
+      <p id="recError" class="message"></p>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
