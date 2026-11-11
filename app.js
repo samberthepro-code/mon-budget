@@ -7,7 +7,10 @@ const configured = SUPABASE_URL.includes("supabase.co") && !SUPABASE_URL.include
 const supabase = configured ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 const $ = id => document.getElementById(id);
-const today = () => new Date().toISOString().slice(0,10);
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+};
 const money = (n,c="EUR") => new Intl.NumberFormat("fr-FR",{style:"currency",currency:c}).format(Number(n||0));
 const dateFR = d => d ? new Date(d+"T12:00:00").toLocaleDateString("fr-FR") : "Sans échéance";
 const state = {user:null,tab:"Résumé",transactions:[],debts:[],debtPayments:[],receivables:[],recurrences:[],goals:[],authMode:"login",calendarDate:new Date(),selectedDate:today()};
@@ -65,7 +68,7 @@ function render(){
   root.querySelectorAll("[data-cal-day]").forEach(b=>b.onclick=()=>{state.selectedDate=b.dataset.calDay;render();});
   root.querySelectorAll("[data-cal-add]").forEach(b=>b.onclick=()=>openTx(null,state.selectedDate));
   root.querySelectorAll("[data-collect]").forEach(b=>b.onclick=()=>openCollection(state.receivables.find(x=>x.id===b.dataset.collect)));
-  root.querySelectorAll("[data-delete-debt]").forEach(b=>b.onclick=()=>remove("debts",b.dataset.deleteDebt));
+  root.querySelectorAll("[data-delete-debt]").forEach(b=>b.onclick=()=>deleteDebt(b.dataset.deleteDebt));
   root.querySelectorAll("[data-delete-receivable]").forEach(b=>b.onclick=()=>remove("receivables",b.dataset.deleteReceivable));
   root.querySelectorAll("[data-delete-rec]").forEach(b=>b.onclick=()=>remove("recurring_rules",b.dataset.deleteRec));
   root.querySelectorAll("[data-delete-goal]").forEach(b=>b.onclick=()=>remove("savings_goals",b.dataset.deleteGoal));
@@ -112,7 +115,7 @@ function txRow(t){return `<div class="tx-row"><div class="tx-icon">${t.type==="i
 function transactionsPage(type){
   const arr=state.transactions.filter(x=>x.type===type);
   return `<section class="card"><div class="section-head"><div><h2>${type==="income"?"Tous mes gains":"Toutes mes dépenses"}</h2><p>${arr.length} opération(s)</p></div><button class="primary" data-action="transactionDialog">＋ Ajouter</button></div>
-  ${arr.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Libellé</th><th>Catégorie</th><th>Montant</th><th>Actions</th></tr></thead><tbody>${arr.map(t=>`<tr><td>${dateFR(t.transaction_date)}</td><td><b>${esc(t.label)}</b></td><td>${esc(t.category||"—")}</td><td class="${type==="income"?"positive":"negative"}"><b>${money(t.amount,t.currency)}</b></td><td><div class="table-actions"><button class="small-btn" data-edit-tx="${t.id}">Modifier</button><button class="small-btn danger-btn" data-delete-tx="${t.id}">Supprimer</button></div></td></tr>`).join("")}</tbody></table></div>`:`<div class="empty"><b>Aucune opération</b>Utilisez « Ajouter » pour enregistrer votre premier mouvement.</div>`}</section>`;
+  ${arr.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Libellé</th><th>Catégorie</th><th>Montant</th><th>Actions</th></tr></thead><tbody>${arr.map(t=>{const linked=state.debtPayments.some(p=>p.transaction_id===t.id);return `<tr><td>${dateFR(t.transaction_date)}</td><td><b>${esc(t.label)}</b></td><td>${esc(t.category||"—")}</td><td class="${type==="income"?"positive":"negative"}"><b>${money(t.amount,t.currency)}</b></td><td>${linked?`<button class="small-btn" data-tab-jump="Dettes">Gérer dans Dettes</button>`:`<div class="table-actions"><button class="small-btn" data-edit-tx="${t.id}">Modifier</button><button class="small-btn danger-btn" data-delete-tx="${t.id}">Supprimer</button></div>`}</td></tr>`}).join("")}</tbody></table></div>`:`<div class="empty"><b>Aucune opération</b>Utilisez « Ajouter » pour enregistrer votre premier mouvement.</div>`}</section>`;
 }
 function debtsPage(){
  return `<div class="section-head"><div><h2>Dettes à rembourser</h2><p>Consultez vos dettes et gérez chaque remboursement enregistré.</p></div><button class="primary" data-action="debtDialog">＋ Ajouter une dette</button></div>
@@ -144,7 +147,44 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&l
 function openTx(t=null,dateOverride=null){$("transactionForm").reset();$("transactionId").value=t?.id||"";$("txType").value=t?.type|| (state.tab==="Gains"?"income":"expense");$("txLabel").value=t?.label||"";$("txAmount").value=t?.amount||"";$("txCurrency").value=t?.currency||"EUR";$("txDate").value=t?.transaction_date||dateOverride||today();$("txCategory").value=t?.category||"";$("txNote").value=t?.note||"";$("transactionDialogTitle").textContent=t?"Modifier une opération":"Ajouter une opération";$("transactionDialog").showModal();}
 function openPayment(d){$("paymentForm").reset();$("paymentEditId").value="";$("paymentDialogTitle").textContent="Enregistrer un paiement";$("paymentSubmit").textContent="Confirmer le paiement";$("paymentDebtId").value=d.id;$("paymentDebtInfo").textContent=`${d.label} — restant : ${money(outstanding(d),d.currency)}`;$("paymentAmount").max=outstanding(d);$("paymentDate").value=today();$("paymentDialog").showModal();}
 function openPaymentEdit(p){const d=state.debts.find(x=>x.id===p.debt_id);if(!d)return;$("paymentForm").reset();$("paymentDebtId").value=d.id;$("paymentEditId").value=p.id;$("paymentDebtInfo").textContent=`Modification du remboursement — ${d.label}`;$("paymentAmount").max=Number(d.amount);$("paymentAmount").value=p.amount;$("paymentDate").value=p.payment_date;$("paymentDialogTitle").textContent="Modifier le remboursement";$("paymentSubmit").textContent="Enregistrer les modifications";$("paymentDialog").showModal();}
-async function deleteDebtPayment(p){if(!p||!confirm("Retirer ce remboursement ? Le solde de la dette et la dépense associée seront recalculés."))return;try{const d=state.debts.find(x=>x.id===p.debt_id);if(p.transaction_id){const {error}=await supabase.from("transactions").delete().eq("id",p.transaction_id);if(error)throw error;}const {error}=await supabase.from("debt_payments").delete().eq("id",p.id);if(error)throw error;if(d){const paid=Math.max(0,Number(d.paid_amount||0)-Number(p.amount));const {error:e}=await supabase.from("debts").update({paid_amount:paid,status:paid>=Number(d.amount)?"paid":"pending"}).eq("id",d.id);if(e)throw e;}await loadAll();}catch(err){alert("Impossible de retirer le remboursement : "+err.message);}}
+async function deleteDebtPayment(p){
+  if(!p||!confirm("Retirer ce remboursement ? Le solde de la dette et la dépense associée seront recalculés."))return;
+  const d=state.debts.find(x=>x.id===p.debt_id);
+  if(!d)return;
+  const oldPaid=Number(d.paid_amount||0),paid=Math.max(0,oldPaid-Number(p.amount));
+  let paymentDeleted=false;
+  try{
+    const {error:debtError}=await supabase.from("debts").update({paid_amount:paid,status:paid>=Number(d.amount)?"paid":"pending"}).eq("id",d.id);
+    if(debtError)throw debtError;
+    const {error:paymentError}=await supabase.from("debt_payments").delete().eq("id",p.id);
+    if(paymentError)throw paymentError;
+    paymentDeleted=true;
+    if(p.transaction_id){
+      const {error:txError}=await supabase.from("transactions").delete().eq("id",p.transaction_id);
+      if(txError)throw txError;
+    }
+    await loadAll();
+  }catch(err){
+    if(paymentDeleted)await supabase.from("debt_payments").insert(p);
+    await supabase.from("debts").update({paid_amount:oldPaid,status:oldPaid>=Number(d.amount)?"paid":"pending"}).eq("id",d.id);
+    alert("Impossible de retirer le remboursement : "+err.message);
+  }
+}
+async function deleteDebt(id){
+  const d=state.debts.find(x=>x.id===id);
+  if(!d||!confirm("Supprimer cette dette et son historique de remboursements ? Les dépenses de remboursement associées seront également supprimées."))return;
+  try{
+    const payments=state.debtPayments.filter(p=>p.debt_id===id);
+    const txIds=payments.map(p=>p.transaction_id).filter(Boolean);
+    if(txIds.length){
+      const {error}=await supabase.from("transactions").delete().in("id",txIds);
+      if(error)throw error;
+    }
+    const {error}=await supabase.from("debts").delete().eq("id",id);
+    if(error)throw error;
+    await loadAll();
+  }catch(err){alert("Impossible de supprimer la dette : "+err.message);}
+}
 function openCollection(r){$("collectionForm").reset();$("collectionId").value=r.id;$("collectionInfo").textContent=`${r.label} — restant à recevoir : ${money(Number(r.amount)-Number(r.received_amount||0),r.currency)}`;$("collectionAmount").max=Number(r.amount)-Number(r.received_amount||0);$("collectionDate").value=today();$("collectionDialog").showModal();}
 $("loginTab").onclick=()=>setAuthMode("login");$("signupTab").onclick=()=>setAuthMode("signup");
 function setAuthMode(m){state.authMode=m;$("loginTab").classList.toggle("active",m==="login");$("signupTab").classList.toggle("active",m==="signup");$("authSubmit").textContent=m==="login"?"Se connecter":"Créer mon compte";}
@@ -154,8 +194,86 @@ $("addQuick").onclick=()=>openTx();
 $("transactionForm").onsubmit=async e=>{e.preventDefault();try{const payload={user_id:state.user.id,type:$("txType").value,label:$("txLabel").value.trim(),amount:Number($("txAmount").value),currency:$("txCurrency").value,transaction_date:$("txDate").value,category:$("txCategory").value.trim()||null,note:$("txNote").value.trim()||null};const id=$("transactionId").value;if(id)await update("transactions",id,payload);else await insert("transactions",payload);$("transactionDialog").close();}catch(err){setMessage("txError",err.message);}};
 $("debtForm").onsubmit=async e=>{e.preventDefault();try{await insert("debts",{user_id:state.user.id,label:$("debtLabel").value.trim(),creditor:$("debtCreditor").value.trim(),amount:Number($("debtAmount").value),paid_amount:0,currency:$("debtCurrency").value,due_date:$("debtDue").value||null,status:"pending"});$("debtDialog").close();}catch(err){setMessage("debtError",err.message);}};
 $("receivableForm").onsubmit=async e=>{e.preventDefault();try{await insert("receivables",{user_id:state.user.id,label:$("receivableLabel").value.trim(),debtor:$("receivableDebtor").value.trim(),amount:Number($("receivableAmount").value),received_amount:0,currency:$("receivableCurrency").value,due_date:$("receivableDue").value||null,status:"pending"});$("receivableDialog").close();}catch(err){setMessage("receivableError",err.message);}};
-$("collectionForm").onsubmit=async e=>{e.preventDefault();const r=state.receivables.find(x=>x.id===$("collectionId").value),amt=Number($("collectionAmount").value),remaining=r?Number(r.amount)-Number(r.received_amount||0):0;if(!r||amt<=0||amt>remaining){setMessage("collectionError","Montant invalide ou supérieur au montant restant à recevoir.");return;}try{await insert("transactions",{user_id:state.user.id,type:"income",label:`Somme reçue : ${r.label}`,amount:amt,currency:r.currency,transaction_date:$("collectionDate").value,category:"Remboursement reçu",note:`Versé par : ${r.debtor}`});await update("receivables",r.id,{received_amount:Number(r.received_amount||0)+amt,status:amt>=remaining?"received":"pending"});$("collectionDialog").close();}catch(err){setMessage("collectionError",err.message);}};
-$("paymentForm").onsubmit=async e=>{e.preventDefault();const d=state.debts.find(x=>x.id===$("paymentDebtId").value),amt=Number($("paymentAmount").value),editId=$("paymentEditId").value,existing=editId?state.debtPayments.find(p=>p.id===editId):null,oldAmount=Number(existing?.amount||0),limit=d?Number(d.amount)-Number(d.paid_amount||0)+oldAmount:0;if(!d||amt<=0||amt>limit){setMessage("paymentError","Montant invalide ou supérieur au montant restant dû.");return;}try{if(existing){const {error}=await supabase.from("debt_payments").update({amount:amt,payment_date:$("paymentDate").value}).eq("id",existing.id);if(error)throw error;if(existing.transaction_id){const {error:e2}=await supabase.from("transactions").update({amount:amt,transaction_date:$("paymentDate").value}).eq("id",existing.transaction_id);if(e2)throw e2;}const paid=Math.max(0,Number(d.paid_amount||0)-oldAmount+amt);const {error:e3}=await supabase.from("debts").update({paid_amount:paid,status:paid>=Number(d.amount)?"paid":"pending"}).eq("id",d.id);if(e3)throw e3;}else{const {data:tx,error:txErr}=await supabase.from("transactions").insert({user_id:state.user.id,type:"expense",label:`Remboursement : ${d.label}`,amount:amt,currency:d.currency,transaction_date:$("paymentDate").value,category:"Remboursement",note:`Créancier : ${d.creditor}`}).select().single();if(txErr)throw txErr;const {error:payErr}=await supabase.from("debt_payments").insert({user_id:state.user.id,debt_id:d.id,transaction_id:tx.id,amount:amt,payment_date:$("paymentDate").value});if(payErr)throw payErr;const paid=Number(d.paid_amount||0)+amt;const {error:e3}=await supabase.from("debts").update({paid_amount:paid,status:paid>=Number(d.amount)?"paid":"pending"}).eq("id",d.id);if(e3)throw e3;}$("paymentDialog").close();$("paymentEditId").value="";$("paymentDialogTitle").textContent="Enregistrer un paiement";$("paymentSubmit").textContent="Confirmer le paiement";await loadAll();}catch(err){setMessage("paymentError",err.message);}};
+$("collectionForm").onsubmit=async e=>{
+  e.preventDefault();
+  const r=state.receivables.find(x=>x.id===$("collectionId").value);
+  const amt=Number($("collectionAmount").value);
+  const remaining=r?Number(r.amount)-Number(r.received_amount||0):0;
+  if(!r||amt<=0||amt>remaining){setMessage("collectionError","Montant invalide ou supérieur au montant restant à recevoir.");return;}
+  let transactionId=null;
+  try{
+    const {data:tx,error:txError}=await supabase.from("transactions").insert({
+      user_id:state.user.id,type:"income",label:`Somme reçue : ${r.label}`,amount:amt,
+      currency:r.currency,transaction_date:$("collectionDate").value,
+      category:"Remboursement reçu",note:`Versé par : ${r.debtor}`
+    }).select("id").single();
+    if(txError)throw txError;
+    transactionId=tx.id;
+    const received=Number(r.received_amount||0)+amt;
+    const {error:updateError}=await supabase.from("receivables").update({
+      received_amount:received,status:received>=Number(r.amount)?"received":"pending"
+    }).eq("id",r.id);
+    if(updateError)throw updateError;
+    $("collectionDialog").close();
+    await loadAll();
+  }catch(err){
+    if(transactionId)await supabase.from("transactions").delete().eq("id",transactionId);
+    setMessage("collectionError",err.message);
+  }
+};
+$("paymentForm").onsubmit=async e=>{
+  e.preventDefault();
+  const d=state.debts.find(x=>x.id===$("paymentDebtId").value);
+  const amt=Number($("paymentAmount").value);
+  const editId=$("paymentEditId").value;
+  const existing=editId?state.debtPayments.find(p=>p.id===editId):null;
+  const oldAmount=Number(existing?.amount||0);
+  const limit=d?Number(d.amount)-Number(d.paid_amount||0)+oldAmount:0;
+  if(!d||amt<=0||amt>limit){setMessage("paymentError","Montant invalide ou supérieur au montant restant dû.");return;}
+  const paymentDate=$("paymentDate").value;
+  const oldPaid=Number(d.paid_amount||0);
+  let createdTransactionId=null;
+  try{
+    if(existing){
+      if(existing.transaction_id){
+        const {error}=await supabase.from("transactions").update({amount:amt,transaction_date:paymentDate}).eq("id",existing.transaction_id);
+        if(error)throw error;
+      }
+      const {error:paymentError}=await supabase.from("debt_payments").update({amount:amt,payment_date:paymentDate}).eq("id",existing.id);
+      if(paymentError)throw paymentError;
+    }else{
+      const {data:tx,error:txError}=await supabase.from("transactions").insert({
+        user_id:state.user.id,type:"expense",label:`Remboursement : ${d.label}`,amount:amt,
+        currency:d.currency,transaction_date:paymentDate,category:"Remboursement",note:`Créancier : ${d.creditor}`
+      }).select("id").single();
+      if(txError)throw txError;
+      createdTransactionId=tx.id;
+      const {error:paymentError}=await supabase.from("debt_payments").insert({
+        user_id:state.user.id,debt_id:d.id,transaction_id:tx.id,amount:amt,payment_date:paymentDate
+      });
+      if(paymentError)throw paymentError;
+    }
+    const paid=existing?Math.max(0,oldPaid-oldAmount+amt):oldPaid+amt;
+    const {error:debtError}=await supabase.from("debts").update({
+      paid_amount:paid,status:paid>=Number(d.amount)?"paid":"pending"
+    }).eq("id",d.id);
+    if(debtError)throw debtError;
+    $("paymentDialog").close();
+    $("paymentEditId").value="";
+    $("paymentDialogTitle").textContent="Enregistrer un paiement";
+    $("paymentSubmit").textContent="Confirmer le paiement";
+    await loadAll();
+  }catch(err){
+    if(createdTransactionId){
+      await supabase.from("debt_payments").delete().eq("transaction_id",createdTransactionId);
+      await supabase.from("transactions").delete().eq("id",createdTransactionId);
+    }else if(existing){
+      await supabase.from("debt_payments").update({amount:oldAmount,payment_date:existing.payment_date}).eq("id",existing.id);
+      if(existing.transaction_id)await supabase.from("transactions").update({amount:oldAmount,transaction_date:existing.payment_date}).eq("id",existing.transaction_id);
+    }
+    setMessage("paymentError",err.message);
+  }
+};
 $("recurringForm").onsubmit=async e=>{e.preventDefault();try{await insert("recurring_rules",{user_id:state.user.id,label:$("recLabel").value.trim(),type:$("recType").value,amount:Number($("recAmount").value),currency:$("recCurrency").value,frequency:$("recFrequency").value,start_date:$("recStart").value,active:true});$("recurringDialog").close();}catch(err){setMessage("recError",err.message);}};
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>$(b.dataset.close).close());
 $("view").addEventListener("click",e=>{const b=e.target.closest("[data-tab-jump]");if(b){state.tab=b.dataset.tabJump;renderNav();render();}});
